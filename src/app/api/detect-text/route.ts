@@ -5,26 +5,20 @@ export async function POST(request: NextRequest) {
     const { text } = await request.json();
 
     if (!text || typeof text !== 'string') {
-      return NextResponse.json(
-        { error: 'Text input is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Text input is required' }, { status: 400 });
     }
 
     const apiKey = process.env.HUGGINGFACE_API_KEY;
     if (!apiKey) {
-      return NextResponse.json(
-        { error: 'Hugging Face API key not configured' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Hugging Face API key not configured' }, { status: 500 });
     }
 
     const response = await fetch(
-      'https://api-inference.huggingface.co/models/roberta-base-openai-detector',
+      'https://api-inference.huggingface.co/models/Hello-SimpleAI/HC3',
       {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ inputs: text }),
@@ -36,19 +30,26 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json();
-    
-    // The model returns an array with two scores: [fake_score, real_score]
-    const [fakeScore, realScore] = data[0];
-    const confidence = Math.max(fakeScore, realScore) * 100;
-    const isAI = fakeScore > realScore;
+
+    const fake = data.find((item: any) => item.label === 'LABEL_0');
+    const human = data.find((item: any) => item.label === 'LABEL_1');
+
+    if (!fake || !human) {
+      return NextResponse.json({ error: 'Invalid model response' }, { status: 500 });
+    }
+
+    const isAI = fake.score > human.score;
     const label = isAI ? 'AI-Generated' : 'Human';
-    const score = isAI ? fakeScore : realScore;
+    const score = isAI ? fake.score : human.score;
+    const confidence = Math.round(score * 100);
 
     return NextResponse.json({
-      confidence: Math.round(confidence),
-      isAI,
       label,
-      score: Math.round(score * 100)
+      isAI,
+      confidence,
+      fakeScore: Math.round(fake.score * 100),
+      humanScore: Math.round(human.score * 100),
+      model: "Hello-SimpleAI/HC3"
     });
 
   } catch (error) {
@@ -58,4 +59,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}

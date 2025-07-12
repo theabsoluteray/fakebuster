@@ -5,52 +5,67 @@ export async function POST(request: NextRequest) {
     const { imageUrl } = await request.json();
 
     if (!imageUrl || typeof imageUrl !== 'string') {
-      return NextResponse.json(
-        { error: 'Image URL is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Image URL is required' }, { status: 400 });
     }
 
-    const apiKey = process.env.REPLICATE_API_TOKEN;
+    const apiKey = process.env.HUGGINGFACE_API_KEY;
     if (!apiKey) {
-      return NextResponse.json(
-        { error: 'Replicate API key not configured' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: 'Hugging Face API key not configured' }, { status: 500 });
     }
 
-    // Using a simple AI image classifier model
-    const response = await fetch('https://api.replicate.com/v1/predictions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        version: "c4c54e3c8c97f50b2b6c8c0c0c0c0c0c0c0c0c0c",
-        input: {
-          image: imageUrl,
+    const response = await fetch(
+      'https://api-inference.huggingface.co/models/nateraw/image-is-ai',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
         },
-      }),
-    });
+        body: JSON.stringify({ inputs: imageUrl }),
+      }
+    );
 
     if (!response.ok) {
-      throw new Error(`Replicate API error: ${response.status}`);
+      throw new Error(`Hugging Face API error: ${response.status}`);
     }
 
-    const prediction = await response.json();
-    
-    // For now, we'll use a fallback approach since the exact model response varies
-    // This is a simplified version - in production you'd use a specific AI detection model
-    const confidence = Math.random() * 100; // Placeholder
-    const isAI = confidence > 60;
-    const label = isAI ? 'AI-Generated' : 'Human';
+    const data = await response.json();
+
+    if (!Array.isArray(data)) {
+      return NextResponse.json({ error: 'Invalid response from model' }, { status: 500 });
+    }
+
+    const best = data.reduce((a: any, b: any) => (a.score > b.score ? a : b));
+    const rawScore = best.score;
+    const rawLabel = best.label === 'LABEL_0' ? 'AI-Generated' : 'Human';
+
+    // Smart Confidence Rule
+    let label = rawLabel;
+    let isAI = rawLabel === 'AI-Generated';
+    let confidence = Math.round(rawScore * 100);
+
+    if (rawScore >= 0.75) {
+      // strong confidence
+    } else if (rawScore >= 0.6 && rawScore < 0.75) {
+      // moderate confidence — frontend can show "likely"
+    } else if (rawScore > 0.45 && rawScore < 0.6) {
+      // uncertain zone
+      label = 'Uncertain';
+      let isAI: boolean | null;
+      confidence = 50;
+    } else {
+      // low confidence, flip label
+      label = rawLabel === 'AI-Generated' ? 'Human' : 'AI-Generated';
+      isAI = label === 'AI-Generated';
+      confidence = Math.round(100 - rawScore * 100);
+    }
 
     return NextResponse.json({
-      confidence: Math.round(confidence),
-      isAI,
       label,
-      score: Math.round(confidence)
+      isAI,
+      confidence,
+      score: rawScore,
+      model: "nateraw/image-is-ai"
     });
 
   } catch (error) {
@@ -60,4 +75,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}
