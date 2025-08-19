@@ -62,3 +62,5 @@ src/
     ├── textDetector.ts          # Text logic
     └── imageDetector.ts         # Image logic
 ```
+
+![preview](https://media.discordapp.net/attachments/1370958073102991463/1407427420956655767/image.png?ex=68a6106d&is=68a4beed&hm=58dc1a8f152c75e5c2e31c73f70616c13281ff240d3bb31e259d54971ade43a7&=&format=webp&quality=lossless&width=1590&height=783)
